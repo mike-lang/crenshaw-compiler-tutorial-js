@@ -13,7 +13,8 @@ const emitLn = cradle.emitLn,
   finish = cradle.finish,
   match = cradle.match,
   look = cradle.look,
-  abort = cradle.abort;
+  abort = cradle.abort,
+  isAlpha = cradle.isAlpha;
 
 function factor() {
   let nextChar = look();
@@ -25,7 +26,12 @@ function factor() {
       .then(() => {
         return match(')');
       });
-  } else  {
+  } else if (isAlpha(nextChar)) {
+    return getName()
+      .then((name) => {
+        emitLn('MOVE ' + GetName + '(PC),D0')
+      });
+  } else {
     return getNum()
       .then((num) => {
         emitLn('MOVE #' + num + ',D0');

@@ -1,7 +1,8 @@
 
-<number>     ::= [0-9]
+<number>     ::= 0 | 1 | 2 | 3 | ... | 9
 <addop>      ::= + | -
 <mulop>      ::= * | /
-<factor>     ::= <number> | (<expression>)
+<variable>   ::= a | b | c | ... | z | A | B | C | ... | Z
+<factor>     ::= <number> | (<expression>) | <variable>
 <term>       ::= <factor> [ <mulop> <factor> ]*
 <expression> ::= <term> [ <addop> <term> ]*
