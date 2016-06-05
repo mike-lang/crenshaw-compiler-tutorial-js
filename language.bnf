@@ -9,3 +9,4 @@
 <factor>     ::= <number> | (<expression>) | <ident>
 <term>       ::= <factor> [ <mulop> <factor> ]*
 <expression> ::= <term> [ <addop> <term> ]*
+<assignment> ::= <ident> = <expression>

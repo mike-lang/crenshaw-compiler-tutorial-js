@@ -4,6 +4,8 @@ process.on('unhandledException', function(err) {
   console.log(err.stack);
 });
 
+const CR = '\r';
+
 const cradle = require('./cradle'),
   q = require('q');
 
@@ -15,7 +17,8 @@ const emitLn = cradle.emitLn,
   match = cradle.match,
   look = cradle.look,
   abort = cradle.abort,
-  isAlpha = cradle.isAlpha;
+  isAlpha = cradle.isAlpha,
+  expected = cradle.expected;
 
 function ident() {
   return getName()
@@ -166,11 +169,34 @@ function expressionTail() {
   }
 }
 
+function assignment() {
+  // Somewhere we need to generate DS directives
+  // for this to work with the EASy68K assembler.
+  // Leaving this as an exercise for now to collect variables
+  // and collect generated code in a buffer so that
+  // the appropriate header with symbol definitions
+  // is put before the code in the results emitted
+  // on stdout
+  return getName()
+    .then((name) => {
+      return match('=')
+        .then(() => {
+          return expression()
+            .then(() => {
+              emitLn('LEA ' + name + '(PC),A0');
+              emitLn('MOVE D0,(A0)');
+            });
+        });
+    });
+}
+
 return init()
   .then(() => {
-    return expression();
+    return assignment();
   })
   .then(() => {
+    let nextChar = look();
+    if (nextChar !== CR) expected('Newline');
     return finish();
   })
   .catch((err) => {
