@@ -94,8 +94,6 @@ function termTail() {
             return multiply();
           case '/':
             return divide();
-          default:
-            expected('Mulop');
         }
       })
       .then(() => {
@@ -158,8 +156,6 @@ function expressionTail() {
             return add();
           case '-':
             return subtract();
-          default:
-            expected('Addop');
         }
       })
       .then(() => {
