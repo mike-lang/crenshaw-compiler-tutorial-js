@@ -1,8 +1,8 @@
 apt-get update
 
-apt-get install curl
-apt-get install build-essential
-apt-get install git
+apt-get install -y curl
+apt-get install -y build-essential
+apt-get install -y git
 
 #install node
 apt-get -y purge nodejs*
