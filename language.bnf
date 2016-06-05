@@ -2,7 +2,10 @@
 <number>     ::= 0 | 1 | 2 | 3 | ... | 9
 <addop>      ::= + | -
 <mulop>      ::= * | /
-<variable>   ::= a | b | c | ... | z | A | B | C | ... | Z
-<factor>     ::= <number> | (<expression>) | <variable>
+<letter>     ::= a | b | c | ... | z | A | B | C | ... | Z
+<variable>   ::= <letter>
+<func-call>  ::= <letter>()
+<ident>      ::= <variable> | <func-call>
+<factor>     ::= <number> | (<expression>) | <ident>
 <term>       ::= <factor> [ <mulop> <factor> ]*
 <expression> ::= <term> [ <addop> <term> ]*

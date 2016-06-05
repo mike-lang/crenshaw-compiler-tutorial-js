@@ -9,12 +9,31 @@ const cradle = require('./cradle'),
 
 const emitLn = cradle.emitLn,
   getNum = cradle.getNum,
+  getName = cradle.getName,
   init = cradle.init,
   finish = cradle.finish,
   match = cradle.match,
   look = cradle.look,
   abort = cradle.abort,
   isAlpha = cradle.isAlpha;
+
+function ident() {
+  return getName()
+    .then((name) => {
+      let nextChar = look();
+      if (nextChar === '(') {
+        return match('(')
+          .then(() => {
+            return match(')');
+          })
+          .then(() => {
+            emitLn('BSR ' + name);
+          });
+      } else {
+        emitLn('MOVE ' + name + '(PC),D0');
+      }
+    });
+}
 
 function factor() {
   let nextChar = look();
@@ -27,10 +46,7 @@ function factor() {
         return match(')');
       });
   } else if (isAlpha(nextChar)) {
-    return getName()
-      .then((name) => {
-        emitLn('MOVE ' + GetName + '(PC),D0')
-      });
+    return ident();
   } else {
     return getNum()
       .then((num) => {
