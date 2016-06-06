@@ -10,7 +10,10 @@ const getNum = cradle.getNum,
   match = cradle.match,
   table = cradle.table,
   isAlpha = cradle.isAlpha,
-  getName = cradle.getName;
+  getName = cradle.getName,
+  getChar = cradle.getChar;
+
+const CR = '\r';
 
 process.on('unhandledException', function(err) {
   console.log(err.stack);
@@ -150,9 +153,29 @@ function assignment() {
     });
 }
 
+function newLine() {
+  let nextChar = look();
+  if (nextChar === CR) {
+    return getChar();
+  }
+}
+
+function assignmentInner() {
+  let nextChar = look();
+  if (nextChar === '.') return;
+
+  return assignment()
+    .then(() => {
+      return newLine();
+    })
+    .then(() => {
+      return assignmentInner();
+    });
+}
+
 init()
   .then(() => {
-    return assignment();
+    return assignmentInner();
   })
   .then((result) => {
     console.log(`table['A']: ${table['A']}`);
