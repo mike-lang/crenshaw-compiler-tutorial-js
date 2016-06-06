@@ -28,7 +28,7 @@ function expressionInner(value) {
               case '+':
                 return match('+')
                   .then(() => {
-                    return getNum();
+                    return term();
                   })
                   .then((num) => {
                     return value + num;
@@ -36,7 +36,7 @@ function expressionInner(value) {
               case '-':
                 return match('-')
                   .then(() => {
-                    return getNum();
+                    return term();
                   })
                   .then((num) => {
                     return value - num;
@@ -60,12 +60,55 @@ function expression() {
       if (isAddOp(nextChar)) {
         return 0;
       } else {
-        return getNum();
+        return term();
       }
     })
     .then((value) => {
       return expressionInner(value);
     })
+}
+
+function termInner(value) {
+  let nextChar = look();
+  return q()
+    .then(() => {
+      if (nextChar === '*' || nextChar === '/') {
+        return q() 
+          .then(() => {
+            switch(nextChar) {
+              case '*':
+                return match('*')
+                  .then(() => {
+                    return getNum();
+                  })
+                  .then((num) => {
+                    return value * num;
+                  });
+              case '/':
+                return match('/')
+                  .then(() => {
+                    return getNum();
+                  })
+                  .then((num) => {
+                    return Math.floor(value / num);
+                  })
+            }
+          })
+          .then((result) => {
+            return termInner(result);
+          });
+        } else {
+          return value;
+        }
+    });
+}
+
+function term() {
+  let value;
+  return getNum()
+    .then((value) => {
+      return termInner(value);
+    });
 }
 
 init()
