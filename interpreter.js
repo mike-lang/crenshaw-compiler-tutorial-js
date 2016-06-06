@@ -79,7 +79,7 @@ function termInner(value) {
               case '*':
                 return match('*')
                   .then(() => {
-                    return getNum();
+                    return factor();
                   })
                   .then((num) => {
                     return value * num;
@@ -87,7 +87,7 @@ function termInner(value) {
               case '/':
                 return match('/')
                   .then(() => {
-                    return getNum();
+                    return factor();
                   })
                   .then((num) => {
                     return Math.floor(value / num);
@@ -105,10 +105,26 @@ function termInner(value) {
 
 function term() {
   let value;
-  return getNum()
+  return factor()
     .then((value) => {
       return termInner(value);
     });
+}
+
+function factor() {
+  let nextChar = look();
+  if (nextChar === '(') {
+    return match('(')
+      .then(() => {
+        return expression();
+      })
+      .then((value) => {
+        return match(')')
+          .thenResolve(value);
+      });
+  } else {
+    return getNum();
+  }
 }
 
 init()
