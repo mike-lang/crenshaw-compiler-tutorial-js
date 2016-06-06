@@ -112,9 +112,6 @@ function isAddOp(c) {
   return (c === '+' || c === '-')
 }
 
-function isAlNum(c) {
-  return isAlpha(c) || isDigit(c);
-}
 
 function add() {
   return match('+')

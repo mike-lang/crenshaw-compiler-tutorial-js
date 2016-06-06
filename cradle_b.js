@@ -51,9 +51,15 @@ function expected(s) {
 exports.expected = expected;
 
 function match(x) {
-  if (look === x) return getChar();
-  else expected(`''` + x + `''`);
+  if (look !== x) expected(`''` + x + `''`);
+  else {
+    return getChar()
+      .then(() => {
+        return skipWhite();
+      });
+  }
 }
+
 exports.match = match;
 
 function isAlpha(c) {
@@ -70,6 +76,23 @@ function isAlNum(c) {
   return isAlpha(c) || isDigit(c);
 }
 exports.isAlNum = isAlNum;
+
+function isWhite(c) {
+  return c === ' ' || c === TAB;
+}
+exports.isWhite = isWhite;
+
+function skipWhite() {
+  return q()
+    .then(() => {
+      if (isWhite(look)) {
+        return getChar()
+          .then(() => {
+            return skipWhite();
+          });
+      }
+    });
+}
 
 function getNameInner(token) {
   let nextChar = look;
@@ -88,7 +111,10 @@ function getName() {
   if (!isAlpha(look)) expected('Name');
   return q()
     .then(() => {
-      return getNameInner('');
+      return getNameInner('')
+        .then((name) => {
+          return skipWhite().thenResolve(name);
+        });
     });
 }
 exports.getName = getName;
@@ -110,7 +136,10 @@ function getNum() {
   if (!isDigit(look)) expected('Integer');
   return q()
     .then(() => {
-      return getNumInner('');
+      return getNumInner('')
+        .then((number) => {
+          return skipWhite().thenResolve(number);
+        });
     });
 }
 exports.getNum = getNum;
@@ -148,7 +177,10 @@ function asmFooter() {
 
 function init() {
   asmHeader();
-  return getChar();
+  return getChar()
+    .then(() => {
+      return skipWhite();
+    });
 }
 exports.init = init;
 
