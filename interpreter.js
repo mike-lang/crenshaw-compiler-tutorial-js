@@ -11,7 +11,8 @@ const getNum = cradle.getNum,
   table = cradle.table,
   isAlpha = cradle.isAlpha,
   getName = cradle.getName,
-  getChar = cradle.getChar;
+  getChar = cradle.getChar,
+  read = cradle.read;
 
 const CR = '\r';
 
@@ -160,25 +161,63 @@ function newLine() {
   }
 }
 
-function assignmentInner() {
+function mainLoop() {
   let nextChar = look();
   if (nextChar === '.') return;
 
-  return assignment()
+  return q()
+    .then(() => {
+      switch(nextChar) {
+        case '?': 
+          return input();
+        case '!':
+          return output();
+        default:
+          return assignment()
+      }
+    })
     .then(() => {
       return newLine();
     })
     .then(() => {
-      return assignmentInner();
+      return mainLoop();
+    });
+}
+
+function input() {
+  return match('?')
+    .then(() => {
+      return getName()
+    })
+    .then((name) => {
+      let nextChar = look();
+      if (nextChar === CR) return q('');
+      return read()
+        .then((i) => {
+          table[name] = parseInt(nextChar + i, 10);
+        })
+        .then(() => {
+          return getChar();
+        });
+    });
+}
+
+function output() {
+  return match('!')
+    .then(() => {
+      return getName()
+        .then((name) => {
+          console.log(table[name]);
+        });
     });
 }
 
 init()
   .then(() => {
-    return assignmentInner();
+    return mainLoop();
   })
   .then((result) => {
-    console.log(`table['A']: ${table['A']}`);
+//    console.log(`table['A']: ${table['A']}`);
   })
   .catch((err) => {
     console.log(err.stack);

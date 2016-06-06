@@ -1,6 +1,7 @@
 'use strict';
 
-const q = require('q');
+const q = require('q'),
+ readline = require('readline');
 
 const TAB = '\t';
 
@@ -19,6 +20,39 @@ function initTable() {
     table[ALPHABET.charAt(i)] = 0;
   }
 }
+
+function read() {
+  const stdin = process.stdin;
+  const deferred = q.defer();
+
+  stdin.setRawMode(true);
+  let line = '';
+  stdin.setEncoding('utf8');
+  stdin.resume();
+  stdin.on('data', function(c) {
+    if ( c.toString() === '\u0003' ) {
+      process.exit();
+    }
+
+    let chunk = c.toString();
+
+    line = line + chunk;
+    if (chunk.charAt(chunk.length - 1) === '\r') {
+      stdin.pause();
+      stdin.setRawMode(false);
+      stdin.removeAllListeners('on');
+      stdin.removeAllListeners('error');
+      return deferred.resolve(line.substr(0, line.length - 1));
+    } 
+  });
+  stdin.once('error', function(err) {
+    return deferred.reject(err);
+  });
+
+  return deferred.promise;
+
+}
+exports.read = read;
 
 function getChar() {
   const stdin = process.stdin;
