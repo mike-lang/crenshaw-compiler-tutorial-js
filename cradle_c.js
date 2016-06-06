@@ -72,10 +72,20 @@ function getName() {
 }
 exports.getName = getName;
 
+function getNumInner(value) {
+
+  if(isDigit(look)) {
+    return getChar()
+      .thenResolve(10 * value + parseInt(look, 10))
+      .then((result) => {
+        return getNumInner(result);
+      });
+  }
+  return value;
+}
 function getNum() {
   if (!isDigit(look)) expected('Integer');
-  let result = parseInt(look, 10);
-  return getChar().thenResolve(result);
+  return getNumInner(0);
 }
 exports.getNum = getNum;
 
