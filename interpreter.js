@@ -7,11 +7,16 @@ const cradle = require('./cradle_c');
 const getNum = cradle.getNum,
   init = cradle.init,
   look = cradle.look,
-  match = cradle.match;
+  match = cradle.match,
+  table = cradle.table,
+  isAlpha = cradle.isAlpha,
+  getName = cradle.getName;
 
 process.on('unhandledException', function(err) {
   console.log(err.stack);
 });
+
+
 
 function isAddOp(c) {
   return c === '+' || c === '-';
@@ -122,17 +127,35 @@ function factor() {
         return match(')')
           .thenResolve(value);
       });
+  } else if (isAlpha(nextChar)) {
+    return getName()
+      .then((name) => {
+        return table[name];
+      });
   } else {
     return getNum();
   }
 }
 
+function assignment() {
+  return getName() 
+    .then((name) => {
+      return match('=')
+        .then(() => {
+          return expression();
+        })
+        .then((value) => {
+          table[name] = value;
+        });
+    });
+}
+
 init()
   .then(() => {
-    return expression();
+    return assignment();
   })
   .then((result) => {
-    console.log(result);
+    console.log(`table['A']: ${table['A']}`);
   })
   .catch((err) => {
     console.log(err.stack);

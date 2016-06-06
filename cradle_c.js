@@ -9,6 +9,17 @@ exports.look = function() {
   return look;
 };
 
+let table = {};
+exports.table = table;
+
+function initTable() {
+  const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+
+  for (let i=0; i<ALPHABET.length; i++) {
+    table[ALPHABET.charAt(i)] = 0;
+  }
+}
+
 function getChar() {
   const stdin = process.stdin;
   const deferred = q.defer();
@@ -120,6 +131,7 @@ function asmFooter() {
 }
 
 function init() {
+  initTable();
   return getChar();
 }
 exports.init = init;
