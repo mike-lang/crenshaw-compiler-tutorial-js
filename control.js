@@ -77,7 +77,7 @@ function doFor() {
 }
 
 function block(exitLabel) {
-  function continueBlock = function() {
+  function continueBlock() {
     return block(exitLabel);
   };
   return q()
