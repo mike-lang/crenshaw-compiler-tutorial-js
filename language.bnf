@@ -1,20 +1,28 @@
 
-<number>     ::= 0 | 1 | 2 | 3 | ... | 9
-<addop>      ::= + | -
-<mulop>      ::= * | /
-<letter>     ::= a | b | c | ... | z | A | B | C | ... | Z
-<variable>   ::= <letter>
-<func-call>  ::= <letter>()
-<ident>      ::= <variable> | <func-call>
-<factor>     ::= <number> | (<expression>) | <ident>
-<term>       ::= <factor> [ <mulop> <factor> ]*
-<expression> ::= <term> [ <addop> <term> ]*
-<assignment> ::= <ident> = <expression>
-<program>    ::= <block> END
-<block>      ::= [ <statement> ]*
-<if>         ::= IF <condition> <block> [ ELSE <block> ] ENDIF
-<while>      ::= WHILE <condition> <block> ENDWHILE
-<loop>       ::= LOOP <block> ENDLOOP
-<repeat>     ::= REPEAT <block> UNTIL <condition>
-<for>        ::= FOR <ident> = <expr1> TO <expr2> <block> ENDFOR
-<do>         ::= DO <expr> <block> ENDDO
+<integer>       ::= 0 | 1 | 2 | 3 | ... | 9
+<addop>         ::= + | -
+<mulop>         ::= * | /
+<letter>        ::= a | b | c | ... | z | A | B | C | ... | Z
+<variable>      ::= <letter>
+<func-call>     ::= <letter>()
+<ident>         ::= <variable> | <func-call>
+<factor>        ::= <integer> | (<expression>) | <ident>
+<signed factor> ::= [<addop>] <factor>
+<term>          ::= <signed factor> [ <mulop> <factor> ]*
+<expression>    ::= <term> [ <addop> <term> ]*
+<b-expression>  ::= <b-term> [<orop> <b-term>]*
+<b-term>        ::= <not-factor> [AND <not-factor>]*
+<not-factor>    ::= [NOT] <b-factor>
+<b-factor>      ::=   <b-literal> 
+                    | <b-variable> 
+                    | <relation>
+<relation>      ::= | <expression> [<relop> <expression>]
+<assignment>    ::= <ident> = <expression>
+<program>       ::= <block> END
+<block>         ::= [ <statement> ]*
+<if>            ::= IF <condition> <block> [ ELSE <block> ] ENDIF
+<while>         ::= WHILE <condition> <block> ENDWHILE
+<loop>          ::= LOOP <block> ENDLOOP
+<repeat>        ::= REPEAT <block> UNTIL <condition>
+<for>           ::= FOR <ident> = <expr1> TO <expr2> <block> ENDFOR
+<do>            ::= DO <expr> <block> ENDDO
