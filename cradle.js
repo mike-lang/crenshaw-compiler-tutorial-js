@@ -22,6 +22,7 @@ function getChar() {
     stdin.pause();
     stdin.setRawMode(false);
     look = c.toString();
+    stdin.removeAllListeners('error');
     return deferred.resolve();
   });
   stdin.once('error', function(err) {

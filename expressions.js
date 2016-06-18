@@ -85,6 +85,7 @@ function divide() {
       emitLn('DIVS D1,D0');
     });
 }
+
 function termTail() {
   let nextChar = look();
   if (nextChar === '*' || nextChar === '/') {
