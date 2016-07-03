@@ -1,0 +1,3 @@
+<program> := ( <global declaration> )*
+<global declaration> ::= <data declaration> |
+                         <function>

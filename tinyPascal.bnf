@@ -1,0 +1,20 @@
+<program> ::= <program-header> <block> '.'
+<program-header> ::= PROGRAM <ident>
+<block> ::= <declarations> <statements>
+<declarations> ::= ( <label list>     |
+                     <constant list>  |
+                     <type list>      |
+                     <variable list>  |
+                     <procedure>      |
+                     <function>           )*
+<statements> ::= <compound statement>
+<compound statement> ::= BEGIN <statement> (';' <statement>)* END
+<statement> ::= <simple statement> | <structured statement>
+<simple statement> ::= <assignment> | <procedure call> | null
+<structured statement> ::= <compound statement> |
+                           <if statement>       |
+                           <case statement>     |
+                           <while statement>    |
+                           <repeat statement>   |
+                           <for statement>      |
+                           <with statement>
