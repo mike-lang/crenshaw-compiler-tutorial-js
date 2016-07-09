@@ -84,8 +84,15 @@ function topDecls() {
 function decl() {
   return match('v')
     .then(() => {
-      return getChar();
+      return getName();
+    })
+    .then((name) => {
+      return alloc(name);
     });
+}
+
+function alloc(name) {
+  console.log(`${name}:\tDC 0`);
 }
 
 init()
