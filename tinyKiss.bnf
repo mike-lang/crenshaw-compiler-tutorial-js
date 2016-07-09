@@ -1,0 +1,2 @@
+<program> ::= PROGRAM <top-level decl> <main> '.'
+<main> ::= BEGIN <block> END
