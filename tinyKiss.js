@@ -9,7 +9,8 @@ const match = cradle.match,
   look = cradle.look,
   abort = cradle.abort,
   getChar = cradle.getChar,
-  getName = cradle.getName;
+  getName = cradle.getName,
+  getNum = cradle.getNum;
 
 
 const CR = '\r';
@@ -113,7 +114,25 @@ function decl() {
 }
 
 function alloc(name) {
-  console.log(`${name}:\tDC 0`);
+  function emitCode(initialValue) {
+    console.log(`${name}:\tDC ${initialValue}`);
+  }
+  return q()
+    .then(() => {
+      let nextChar = look();
+      if (nextChar === '=') {
+        return match('=')
+          .then(() => {
+            return getNum();
+          })
+          .then((num) => {
+            emitCode(num);
+          });
+      } else {
+        emitCode(0);
+      }
+    });
+
 }
 
 init()

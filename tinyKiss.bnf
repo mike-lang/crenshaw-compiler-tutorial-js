@@ -2,4 +2,5 @@
 <main> ::= BEGIN <block> END
 <top-level decls> ::= ( <data declaration> )*
 <data declaration> ::= VAR <var-list>
-<var-list> ::= <ident> (, <ident>)*
+<var-list> ::= <var> (, <var>)*
+<var> ::= <ident> [ = <integer> ]
