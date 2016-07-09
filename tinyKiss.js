@@ -10,10 +10,35 @@ const match = cradle.match,
   abort = cradle.abort,
   getChar = cradle.getChar,
   getName = cradle.getName,
-  getNum = cradle.getNum;
+  isDigit = cradle.isDigit,
+  expected = cradle.expected;
 
 
 const CR = '\r';
+
+function getNum() {
+  function getNumTail(value) {
+    let nextChar = look();
+    if (isDigit(nextChar)) {
+      value = 10 * value + parseInt(nextChar, 10);
+      return getChar()
+        .then(() => {
+          return getNumTail(value);
+        });
+    } else {
+      return value;
+    }
+  }
+  let nextChar = look();
+
+  if (!isDigit(nextChar)) {
+    expected('Integer');
+  }
+
+  return getNumTail(0);
+
+}
+
 
 function init() {
   return getChar();
