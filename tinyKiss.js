@@ -25,14 +25,11 @@ function prog() {
       return header();
     })
     .then(() => {
-      return prolog();
+      return main();
     })
     .then(() => {
       return match('.');
-    })
-    .then(() => {
-      return epilog();
-    })
+    });
 }
 
 function header() {
@@ -46,6 +43,19 @@ function prolog() {
 function epilog() {
   emitLn('DC WARMST');
   emitLn('END MAIN');
+}
+
+function main() {
+  return match('b')
+    .then(() => {
+      return prolog();
+    })
+    .then(() => {
+      return match('e');
+    })
+    .then(() => {
+      return epilog();
+    });
 }
 
 init()
