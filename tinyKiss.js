@@ -16,6 +16,8 @@ const match = cradle.match,
 
 const CR = '\r';
 
+let symbolTable = {};
+
 function getNum() {
   function getNumTail(value) {
     let nextChar = look();
@@ -142,22 +144,41 @@ function alloc(name) {
   function emitCode(initialValue) {
     console.log(`${name}:\tDC ${initialValue}`);
   }
+
+  if (inTable(name)) {
+    abort('Duplicate Variable Name ' + name);
+  }
+
+  let isNegative = false;
+
+  symbolTable[name] = 'v';
+
   return q()
     .then(() => {
       let nextChar = look();
       if (nextChar === '=') {
         return match('=')
           .then(() => {
+            let nextChar = look();
+            if (nextChar === '-') {
+              isNegative = true;
+              return match('-');
+            }
+          }).then(() => {
             return getNum();
           })
           .then((num) => {
-            emitCode(num);
+            emitCode(num * (isNegative ? -1 : 1));
           });
       } else {
         emitCode(0);
       }
     });
 
+}
+
+function inTable(name) {
+  return symbolTable[name] !== undefined;
 }
 
 init()
