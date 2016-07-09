@@ -8,7 +8,9 @@ const match = cradle.match,
   emitLn = cradle.emitLn,
   look = cradle.look,
   abort = cradle.abort,
-  getChar = cradle.getChar;
+  getChar = cradle.getChar,
+  getName = cradle.getName;
+
 
 const CR = '\r';
 
@@ -82,12 +84,31 @@ function topDecls() {
 }
 
 function decl() {
+  function varlistTail() {
+    let nextChar = look();
+    if (nextChar === ',') {
+      return getChar()
+        .then(() => {
+          return getName();
+        })
+        .then((name) => {
+          return alloc(name);
+        })
+        .then(() => {
+          return varlistTail();
+        });
+    }
+  }
+
   return match('v')
     .then(() => {
       return getName();
     })
     .then((name) => {
       return alloc(name);
+    })
+    .then(() => {
+      return varlistTail();
     });
 }
 
