@@ -1,2 +1,4 @@
 <program> ::= PROGRAM <top-level decl> <main> '.'
 <main> ::= BEGIN <block> END
+<top-level decls> ::= ( <data declaration> )*
+<data declaration> ::= VAR <var-list>
