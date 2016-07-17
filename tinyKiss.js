@@ -20,16 +20,55 @@ let symbolTable = {};
 
 let labelCount = 0;
 
+let token;
+let value;
+
+const NKW = 9,
+  NKW1 = 10;
+
+const KWList = ['IF', 'ELSE', 'ENDIF', 'WHILE',
+  'ENDWHILE', 'VAR', 'BEGIN', 'END', 'PROGRAM'];
+
+const KWCode = 'xilewevbep';
+
+function lookup(s) {
+  return KWList.indexOf(s) + 1;
+}
+
+function scan() {
+  return getName()
+    .then(() => {
+      token = KWCode[lookup(value)];
+    });
+}
+
+function matchString(x) {
+  if (value !== x) {
+    expected(`'${x}'`);
+  }
+}
+
 function getName() {
+  function gatherAlNum() {
+    let nextChar = look();
+    if (isAlNum(nextChar)) {
+      value = value + nextChar.toUpperCase();
+      return getChar()
+        .then(() => {
+          return gatherAlNum();
+        });
+    }
+  }
+
   return newLine()
     .then(() => {
-      if (!isAlpha(look)) expected('Name');
-      let result = look.toUpperCase();
-      return getChar().thenResolve(result);
+      let nextChar = look();
+      if (!isAlpha(nextChar)) expected('Name');
+      value = '';
+      return gatherAlNum();
     })
-    .then((name) => {
-      return skipWhite()
-        .thenResolve(name);
+    .then(() => {
+      return skipWhite();
     });
 }
 
@@ -105,7 +144,7 @@ function getNum() {
 function init() {
   return getChar()
     .then(() => {
-      return skipWhite();
+      return scan();
     });
 }
 
@@ -115,7 +154,7 @@ function postLabel(l) {
 
 
 function prog() {
-  return match('p')
+  return matchString('PROGRAM')
     .then(() => {
       return header();
     })
@@ -144,7 +183,7 @@ function epilog() {
 }
 
 function main() {
-  return match('b')
+  return matchString('BEGIN')
     .then(() => {
       return prolog();
     })
@@ -152,7 +191,7 @@ function main() {
       return block();
     })
     .then(() => {
-      return match('e');
+      return matchString('END');
     })
     .then(() => {
       return epilog();
@@ -160,23 +199,26 @@ function main() {
 }
 
 function topDecls() {
-  return newLine()
+  function topDeclsTail() {
+    if (token !== 'b') {
+      return q()
+        .then(() => {
+          switch(token) {
+            case 'v': return decl();
+            default: abort('Unrecognized Keyword ' + value);
+          }
+        })
+        .then(() => {
+          return scan();
+        })
+        .then(() => {
+          return topDeclsTail();
+        });
+    }
+  }
+  return scan()
     .then(() => {
-      let nextChar = look();
-      if (nextChar !== 'b') {
-        return q()
-          .then(() => {
-            switch (nextChar) {
-              case 'v': 
-                return decl();
-              default:
-                abort(`Unrecognized keyword '${nextChar}'`);
-            }
-          })
-          .then(() => {
-            return topDecls();
-          });
-      }
+      return topDeclsTail();
     });
 }
 
@@ -188,8 +230,8 @@ function decl() {
         .then(() => {
           return getName();
         })
-        .then((name) => {
-          return alloc(name);
+        .then(() => {
+          return alloc(value[0]);
         })
         .then(() => {
           return newLine();
@@ -203,12 +245,12 @@ function decl() {
   return newLine()
     .then(() => {
       return match('v');
-    });
+    })
     .then(() => {
       return getName();
     })
-    .then((name) => {
-      return alloc(name);
+    .then(() => {
+      return alloc(value[0]);
     })
     .then(() => {
       return varlistTail();
@@ -258,7 +300,8 @@ function inTable(name) {
 
 function assignment() {
   return getName()
-    .then((name) => {
+    .then(() => {
+      let name = value[0];
       return match('=')
         .then(() => {
           return boolExpression();
@@ -270,22 +313,28 @@ function assignment() {
 }
 
 function block() {
-  return newLine()
+  function blockTail() {
+    if (!(token === 'e' || token === 'l')) {
+      return q()
+        .then(() => {
+          switch(token) {
+            case 'i': return doIf();
+            case 'w': return doWhile();
+            default: return assignment();
+          }
+        })
+        .then(() => {
+          return scan();
+        })
+        .then(() => {
+          return blockTail();
+        });
+    }
+  }
+
+  return scan()
     .then(() => {
-      let nextChar = look();
-      if (nextChar !== 'e' && nextChar !== 'l') {
-        return q()
-          .then(() => {
-            switch(nextChar) {
-              case 'i': return doIf();
-              case 'w': return doWhile();
-              default: return assignment();
-            }
-          })
-          .then(() => {
-            return block();
-          });
-      }
+      return blockTail();
     });
 }
 
@@ -601,8 +650,8 @@ function factor() {
       });
   } else if (isAlpha(nextChar)) {
     return getName()
-      .then((name) => {
-        return loadVar(name);
+      .then(() => {
+        return loadVar(value);
       });
   } else {
     return getNum()
@@ -757,10 +806,7 @@ function expression() {
 
 function doIf() {
   let label1, label2;
-  return match('i')
-    .then(() => {
-      return boolExpression();
-    })
+  return boolExpression()
     .then(() => {
       label1 = newLabel();
       label2 = label1;
@@ -770,9 +816,8 @@ function doIf() {
       return block();
     })
     .then(() => {
-      let nextChar = look();
-      if (nextChar === 'l') {
-        return match('l')
+      if (token === 'l') {
+        return q()
           .then(() => {
             label2 = newLabel();
             return branch(label2);
@@ -789,13 +834,13 @@ function doIf() {
       return postLabel(label2);
     })
     .then(() => {
-      return match('e');
+      return matchString('ENDIF');
     });
 }
 
 function doWhile() {
   let label1, label2;
-  return match('w')
+  return q()
     .then(() => {
       label1 = newLabel();
       label2 = newLabel();
@@ -811,7 +856,7 @@ function doWhile() {
       return block();
     })
     .then(() => {
-      return match('e');
+      return matchString('ENDWHILE');
     })
     .then(() => {
       return branch(label1);
