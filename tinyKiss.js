@@ -4,22 +4,45 @@ const q = require('q');
 
 const cradle = require('./cradle');
 
-const match = cradle.match,
-  emitLn = cradle.emitLn,
+const emitLn = cradle.emitLn,
   look = cradle.look,
   abort = cradle.abort,
   getChar = cradle.getChar,
-  getName = cradle.getName,
   isDigit = cradle.isDigit,
   isAlpha = cradle.isAlpha,
   expected = cradle.expected;
 
 
-const CR = '\r';
+const CR = '\r', 
+  LF = '\n';
 
 let symbolTable = {};
 
 let labelCount = 0;
+
+function getName() {
+  return newLine()
+    .then(() => {
+      if (!isAlpha(look)) expected('Name');
+      let result = look.toUpperCase();
+      return getChar().thenResolve(result);
+    })
+    .then((name) => {
+      return skipWhite()
+        .thenResolve(name);
+    });
+}
+
+function match(x) {
+  return newLine()
+    .then(() => {
+      if (look === x) return getChar();
+      else expected(`''` + x + `''`);
+    })
+    .then(() => {
+      return skipWhite();
+    });
+}
 
 function newLabel() {
   let result = 'L' + labelCount;
@@ -61,19 +84,29 @@ function getNum() {
       return value;
     }
   }
-  let nextChar = look();
-
-  if (!isDigit(nextChar)) {
-    expected('Integer');
-  }
-
-  return getNumTail(0);
+  return newLine()
+    .then(() => {
+      let nextChar = look();
+    
+      if (!isDigit(nextChar)) {
+        expected('Integer');
+      }
+    
+      return getNumTail(0);
+    })
+    .then((number) => {
+      return skipWhite()
+        .thenResolve(number);
+    });
 
 }
 
 
 function init() {
-  return getChar();
+  return getChar()
+    .then(() => {
+      return skipWhite();
+    });
 }
 
 function postLabel(l) {
@@ -127,21 +160,24 @@ function main() {
 }
 
 function topDecls() {
-  let nextChar = look();
-  if (nextChar !== 'b') {
-    return q()
-      .then(() => {
-        switch (nextChar) {
-          case 'v': 
-            return decl();
-          default:
-            abort(`Unrecognized keyword '${nextChar}'`);
-        }
-      })
-      .then(() => {
-        return topDecls();
-      });
-  }
+  return newLine()
+    .then(() => {
+      let nextChar = look();
+      if (nextChar !== 'b') {
+        return q()
+          .then(() => {
+            switch (nextChar) {
+              case 'v': 
+                return decl();
+              default:
+                abort(`Unrecognized keyword '${nextChar}'`);
+            }
+          })
+          .then(() => {
+            return topDecls();
+          });
+      }
+    });
 }
 
 function decl() {
@@ -156,12 +192,18 @@ function decl() {
           return alloc(name);
         })
         .then(() => {
+          return newLine();
+        })
+        .then(() => {
           return varlistTail();
         });
     }
   }
 
-  return match('v')
+  return newLine()
+    .then(() => {
+      return match('v');
+    });
     .then(() => {
       return getName();
     })
@@ -228,20 +270,23 @@ function assignment() {
 }
 
 function block() {
-  let nextChar = look();
-  if (nextChar !== 'e' && nextChar !== 'l') {
-    return q()
-      .then(() => {
-        switch(nextChar) {
-          case 'i': return doIf();
-          case 'w': return doWhile();
-          default: return assignment();
-        }
-      })
-      .then(() => {
-        return block();
-      });
-  }
+  return newLine()
+    .then(() => {
+      let nextChar = look();
+      if (nextChar !== 'e' && nextChar !== 'l') {
+        return q()
+          .then(() => {
+            switch(nextChar) {
+              case 'i': return doIf();
+              case 'w': return doWhile();
+              default: return assignment();
+            }
+          })
+          .then(() => {
+            return block();
+          });
+      }
+    });
 }
 
 // Clears the primary register
@@ -471,12 +516,18 @@ function boolTerm() {
           return popAnd();
         })
         .then(() => {
+          return newLine();
+        })
+        .then(() => {
           return boolTermTail();
         });
     }
   }
 
-  return notFactor()
+  return newLine()
+    .then(() => {
+      return notFactor();
+    })
     .then(() => {
       return boolTermTail();
     });
@@ -517,12 +568,18 @@ function boolExpression() {
           }
         })
         .then(() => {
+          return newLine();
+        })
+        .then(() => {
           return boolExpressionTail();
         });
     }
   }
 
-  return boolTerm()
+  return newLine()
+    .then(() => {
+      return boolTerm();
+    })
     .then(() => {
       return boolExpressionTail();
     });
@@ -609,23 +666,26 @@ function divide() {
 }
 
 function term1() {
-  let nextChar = look();
-  if (isMulop(nextChar)) {
-    return q()
-      .then(() => {
-        return push();
-      })
-      .then(() => {
-        let nextChar = look();
-        switch(nextChar) {
-          case '*': return multiply();
-          case '/': return divide();
-        }
-      })
-      .then(() => {
-        return term1();
-      });
-  }
+  return newLine()
+    .then(() => {
+      let nextChar = look();
+      if (isMulop(nextChar)) {
+        return q()
+          .then(() => {
+            return push();
+          })
+          .then(() => {
+            let nextChar = look();
+            switch(nextChar) {
+              case '*': return multiply();
+              case '/': return divide();
+            }
+          })
+          .then(() => {
+            return term1();
+          });
+      }
+    });
 }
 
 function term() {
@@ -678,12 +738,18 @@ function expression() {
           }
         })
         .then(() => {
+          return newLine();
+        })
+        .then(() => {
           return expressionTail();
         });
     }
   }
 
-  return firstTerm()
+  return newLine()
+    .then(() => {
+      return firstTerm();
+    })
     .then(() => {
       return expressionTail();
     });
@@ -752,6 +818,41 @@ function doWhile() {
     })
     .then(() => {
       return postLabel(label2);
+    });
+}
+
+function skipWhite() {
+  return q()
+    .then(() => {
+      let nextChar = look();
+      if (isWhite(nextChar)) {
+        return getChar()
+          .then(() => {
+            return skipWhite();
+          });
+      }
+    });
+}
+
+function newLine() {
+  return q()
+    .then(() => {
+      let nextChar = look();
+      if (nextChar === CR) {
+        return getChar()
+          .then(() => {
+            let nextChar = look();
+            if (nextChar === LF) {
+              return getChar();
+            }
+          })
+          .then(() => {
+            return skipWhite();
+          })
+          .then(() => {
+            return newLine();
+          });
+      }
     });
 }
 
