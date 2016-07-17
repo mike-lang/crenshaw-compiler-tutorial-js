@@ -4,3 +4,18 @@
 <data declaration> ::= VAR <var-list>
 <var-list> ::= <var> (, <var>)*
 <var> ::= <ident> [ = <integer> ]
+<block> ::= ( <statement> )*
+<statement> ::= <if> | <while> | <assignment>
+<assignment> ::= <ident> = <expression>
+<expression> ::= <first term> ( <addop> <term> )*
+<first term> ::= <first factor> <rest>
+<term> ::= <factor> <rest>
+<rest> ::= ( <mulop> <factor> )*
+<first factor> ::= [ <addop> ] <factor>
+<factor> ::= <var> | <number> | ( <expression> )
+<bool-expr> ::= <bool-term> ( <orop> <bool-term> )*
+<bool-term> ::= <not-factor> ( <andop> <not-factor> )*
+<not-factor> ::= [ '!' ] <relation>
+<relation> ::= <expression> [ <relop> <expression> ]
+<if> ::= IF <bool-expression> <block> [ ELSE <block> ] ENDIF
+<while> ::= WHILE <bool-expression> <block> ENDWHILE
