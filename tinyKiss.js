@@ -268,19 +268,6 @@ function decl() {
       return varlistTail();
     });
 
-//  return newLine()
-//    .then(() => {
-//      return match('v');
-//    })
-//    .then(() => {
-//      return getName();
-//    })
-//    .then(() => {
-//      return alloc(value[0]);
-//    })
-//    .then(() => {
-//      return varlistTail();
-//    });
 }
 
 function alloc(name) {
