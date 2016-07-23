@@ -25,13 +25,14 @@ let labelCount = 0;
 let token;
 let value;
 
-const NKW = 9,
-  NKW1 = 10;
+const NKW = 11,
+  NKW1 = 12;
 
 const KWList = ['IF', 'ELSE', 'ENDIF', 'WHILE',
-  'ENDWHILE', 'VAR', 'BEGIN', 'END', 'PROGRAM'];
+  'ENDWHILE', 'READ', 'WRITE', 'VAR', 'BEGIN', 
+  'END', 'PROGRAM'];
 
-const KWCode = 'xilewevbep';
+const KWCode = 'xileweRWvbep';
 
 
 
@@ -192,6 +193,9 @@ function prog() {
 
 function header() {
   console.log('WARMST\tEQU $A01E');
+  // Probably need to use INCLUDE directive instead for
+  // the assembler included in EASy68K
+  emitLn('LIB TINYLIB');
 }
 
 function prolog() {
@@ -343,6 +347,8 @@ function block() {
           switch(token) {
             case 'i': return doIf();
             case 'w': return doWhile();
+            case 'R': return doRead();
+            case 'W': return doWrite();
             default: return assignment();
           }
         })
@@ -492,6 +498,17 @@ function setLessOrEqual() {
 function setGreaterOrEqual() {
   emitLn('SLE D0');
   emitLn('EXT D0');
+}
+
+// Read variable to primary register
+function readVar() {
+  emitLn('BSR READ');
+  store(value);
+}
+
+// Write variable from primary register
+function writeVar() {
+  emitLn('BSR WRITE');
 }
 
 function equals() {
@@ -931,6 +948,69 @@ function doWhile() {
     })
     .then(() => {
       return postLabel(label2);
+    });
+}
+
+function doRead() {
+  function varListTail() {
+    let nextChar = look();
+    if (nextChar === ',') {
+      return match(',')
+        .then(() => {
+          return getName();
+        })
+        .then(() => {
+          return readVar();
+        })
+        .then(() => {
+          return varListTail();
+        });
+    }
+  }
+
+  return match('(')
+    .then(() => {
+      return getName();
+    })
+    .then(() => {
+      return readVar();
+    })
+    .then(() => {
+      return varListTail();
+    })
+    .then(() => {
+      return match(')');
+    });
+}
+
+function doWrite() {
+  function writeListTail() {
+    let nextChar = look();
+    if (nextChar === ',') {
+      return match(',')
+        .then(() => {
+          return expression();
+        })
+        .then(() => {
+          return writeVar();
+        })
+        .then(() => {
+          return writeListTail();
+        });
+    }
+  }
+  return match('(')
+    .then(() => {
+      return expression();
+    })
+    .then(() => {
+      return writeVar();
+    })
+    .then(() => {
+      return writeListTail();
+    })
+    .then(() => {
+      return match(')');
     });
 }
 
