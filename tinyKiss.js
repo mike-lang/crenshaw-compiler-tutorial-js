@@ -2,6 +2,8 @@
 
 const q = require('q');
 
+q.longStackSupport = true;
+
 const cradle = require('./cradle');
 
 const emitLn = cradle.emitLn,
@@ -9,12 +11,12 @@ const emitLn = cradle.emitLn,
   abort = cradle.abort,
   getChar = cradle.getChar,
   isDigit = cradle.isDigit,
-  isAlpha = cradle.isAlpha,
-  expected = cradle.expected;
+  isAlpha = cradle.isAlpha;
 
 
 const CR = '\r', 
-  LF = '\n';
+  LF = '\n',
+  TAB = '\t';
 
 let symbolTable = {};
 
@@ -31,8 +33,15 @@ const KWList = ['IF', 'ELSE', 'ENDIF', 'WHILE',
 
 const KWCode = 'xilewevbep';
 
+
+
 function lookup(s) {
   return KWList.indexOf(s) + 1;
+}
+
+
+function expected(s, a) {
+  abort(`"${s}" Expected, instead saw "${a}"`);
 }
 
 function scan() {
@@ -43,9 +52,20 @@ function scan() {
 }
 
 function matchString(x) {
-  if (value !== x) {
-    expected(`'${x}'`);
-  }
+  return q()
+    .then(() => {
+      if (value !== x) {
+        expected(`'${x}'`, value);
+      }
+    });
+}
+
+function isAlNum(c) {
+  return isAlpha(c) || isDigit(c);
+}
+
+function isWhite(c) {
+  return c === ' ' || c === TAB;
 }
 
 function getName() {
@@ -63,7 +83,7 @@ function getName() {
   return newLine()
     .then(() => {
       let nextChar = look();
-      if (!isAlpha(nextChar)) expected('Name');
+      if (!isAlpha(nextChar)) expected('Name', nextChar);
       value = '';
       return gatherAlNum();
     })
@@ -75,8 +95,9 @@ function getName() {
 function match(x) {
   return newLine()
     .then(() => {
-      if (look === x) return getChar();
-      else expected(`''` + x + `''`);
+      let nextChar = look();
+      if (nextChar === x) return getChar();
+      else expected(`''` + x + `''`, nextChar);
     })
     .then(() => {
       return skipWhite();
@@ -128,7 +149,7 @@ function getNum() {
       let nextChar = look();
     
       if (!isDigit(nextChar)) {
-        expected('Integer');
+        expected('Integer', nextChar);
       }
     
       return getNumTail(0);
@@ -226,15 +247,12 @@ function decl() {
   function varlistTail() {
     let nextChar = look();
     if (nextChar === ',') {
-      return getChar()
+      return match(',')
         .then(() => {
           return getName();
         })
         .then(() => {
-          return alloc(value[0]);
-        })
-        .then(() => {
-          return newLine();
+          return alloc(value);
         })
         .then(() => {
           return varlistTail();
@@ -242,19 +260,27 @@ function decl() {
     }
   }
 
-  return newLine()
+  return getName()
     .then(() => {
-      return match('v');
-    })
-    .then(() => {
-      return getName();
-    })
-    .then(() => {
-      return alloc(value[0]);
+      return alloc(value);
     })
     .then(() => {
       return varlistTail();
     });
+
+//  return newLine()
+//    .then(() => {
+//      return match('v');
+//    })
+//    .then(() => {
+//      return getName();
+//    })
+//    .then(() => {
+//      return alloc(value[0]);
+//    })
+//    .then(() => {
+//      return varlistTail();
+//    });
 }
 
 function alloc(name) {
@@ -265,6 +291,8 @@ function alloc(name) {
   if (inTable(name)) {
     abort('Duplicate Variable Name ' + name);
   }
+
+  addEntry(name, 'v');
 
   let isNegative = false;
 
@@ -298,10 +326,18 @@ function inTable(name) {
   return symbolTable[name] !== undefined;
 }
 
+function addEntry(name, symbolType) {
+  if (inTable(name)) {
+    abort('Duplicate Identifier ' + name);
+  }
+
+  symbolTable[name] = symbolType;
+}
+
 function assignment() {
-  return getName()
+  return q()
     .then(() => {
-      let name = value[0];
+      let name = value;
       return match('=')
         .then(() => {
           return boolExpression();
@@ -897,6 +933,16 @@ function newLine() {
           .then(() => {
             return newLine();
           });
+      } else {
+        if (nextChar === LF) {
+          return getChar()
+            .then(() => {
+              return skipWhite();
+            })
+            .then(() => {
+              return newLine();
+            });
+        }
       }
     });
 }
@@ -915,3 +961,7 @@ init()
     console.log(err.stack);
   });
 
+
+process.on('uncaughtException', function(err) {
+  console.log(err.stack);
+});
