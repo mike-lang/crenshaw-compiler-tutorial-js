@@ -482,6 +482,18 @@ function branchFalse(l) {
   emitLn('BEQ ' + l);
 }
 
+// Set D0 if compare was <=
+function setLessOrEqual() {
+  emitLn('SGE D0');
+  emitLn('EXT D0');
+}
+
+// Set D0 if compare was >=
+function setGreaterOrEqual() {
+  emitLn('SLE D0');
+  emitLn('EXT D0');
+}
+
 function equals() {
   return match('=')
     .then(() => {
@@ -496,7 +508,7 @@ function equals() {
 }
 
 function notEquals() {
-  return match('#')
+  return match('>')
     .then(() => {
       return expression();
     })
@@ -511,26 +523,59 @@ function notEquals() {
 function less() {
   return match('<')
     .then(() => {
+      let nextChar = look();
+      switch(nextChar) {
+        case '=': return lessOrEqual();
+        case '>': return notEquals();
+        default:
+          return expression()
+            .then(() => {
+              return popCompare();
+            })
+            .then(() => {
+              return setLess();
+            });
+      }
+    });
+}
+
+function lessOrEqual() {
+  return match('=')
+    .then(() => {
       return expression();
     })
     .then(() => {
       return popCompare();
     })
     .then(() => {
-      return setLess();
+      return setLessOrEqual();
     });
 }
 
 function greater() {
   return match('>')
     .then(() => {
-      return expression();
-    })
-    .then(() => {
-      return popCompare();
-    })
-    .then(() => {
-      return setGreater();
+      let nextChar = look();
+      if (nextChar === '=') {
+        return match('=')
+          .then(() => {
+            return expression();
+          })
+          .then(() => {
+            return popCompare();
+          })
+          .then(() => {
+            return setGreaterOrEqual();
+          });
+      } else {
+        return expression()
+          .then(() => {
+            return popCompare();
+          })
+          .then(() => {
+            return setGreater();
+          });
+      }
     });
 }
 
