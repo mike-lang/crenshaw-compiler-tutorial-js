@@ -25,14 +25,13 @@ let labelCount = 0;
 let token;
 let value;
 
-const NKW = 11,
-  NKW1 = 12;
+const NKW = 9,
+  NKW1 = 10;
 
 const KWList = ['IF', 'ELSE', 'ENDIF', 'WHILE',
-  'ENDWHILE', 'READ', 'WRITE', 'VAR', 'BEGIN', 
-  'END', 'PROGRAM'];
+  'ENDWHILE', 'READ', 'WRITE', 'VAR', 'END'];
 
-const KWCode = 'xileweRWvbep';
+const KWCode = 'xileweRWve';
 
 
 
@@ -40,16 +39,18 @@ function lookup(s) {
   return KWList.indexOf(s) + 1;
 }
 
+function locate(s) {
+  return KWList.indexOf(s) + 1;
+}
 
 function expected(s, a) {
   abort(`"${s}" Expected, instead saw "${a}"`);
 }
 
 function scan() {
-  return getName()
-    .then(() => {
-      token = KWCode[lookup(value)];
-    });
+  if (token === 'x') {
+    token = KWCode[lookup(value)];
+  }
 }
 
 function matchString(x) {
@@ -160,23 +161,14 @@ function getNum() {
 }
 
 function getOp() {
-  function getOpTail() {
-    let nextChar = look();
-    value = value + nextChar;
-    return getChar()
-      .then(() => {
-        let nextChar = look();
-        if (!isAlpha(nextChar) && !isDigit(nextChar) && !isWhite(nextChar)) {
-          return getOpTail();
-        }
-      });
-  }
+  return skipWhite()
+    .then(() => {
+      let nextChar = look();
+      token = nextChar;
+      value = nextChar;
+      return getChar();
+    });
 
-  let nextChar = look();
-  token = nextChar;
-  value = '';
-
-  return getOpTail();
 }
 
 function next() {
@@ -196,7 +188,7 @@ function next() {
 function init() {
   return getChar()
     .then(() => {
-      return scan();
+      return next();
     });
 }
 
@@ -204,28 +196,12 @@ function postLabel(l) {
   console.log(l + ':');
 }
 
-
-function prog() {
-  return matchString('PROGRAM')
-    .then(() => {
-      return header();
-    })
-    .then(() => {
-      return topDecls();
-    })
-    .then(() => {
-      return main();
-    })
-    .then(() => {
-      return match('.');
-    });
-}
-
 function header() {
   console.log('WARMST\tEQU $A01E');
   // Probably need to use INCLUDE directive instead for
   // the assembler included in EASy68K
-  emitLn('LIB TINYLIB');
+  // This doesn't show up in Tiny1.1
+  //emitLn('LIB TINYLIB');
 }
 
 function prolog() {
@@ -255,22 +231,32 @@ function main() {
 
 function topDecls() {
   function topDeclsTail() {
-    if (token !== 'b') {
+    function declListTail() {
       return q()
         .then(() => {
-          switch(token) {
-            case 'v': return decl();
-            default: abort('Unrecognized Keyword ' + value);
+          if (token === ',') {
+            return alloc()
+              .then(() => {
+                return declListTail();
+              });
           }
-        })
-        .then(() => {
-          return scan();
-        })
-        .then(() => {
-          return topDeclsTail();
         });
     }
+
+    return q()
+      .then(() => {
+        if (token === 'v') {
+          return alloc()
+            .then(() => {
+              return declListTail();
+            });
+        }
+      })
+      .then(() => {
+        return topDeclsTail();
+      });
   }
+
   return scan()
     .then(() => {
       return topDeclsTail();
@@ -304,41 +290,28 @@ function decl() {
 
 }
 
+// Allocate storage for a static variable
+function allocate(name, val) {
+  console.log(`${name}:\tDC ${val}`);
+}
+
 function alloc(name) {
-  function emitCode(initialValue) {
-    console.log(`${name}:\tDC ${initialValue}`);
-  }
 
-  if (inTable(name)) {
-    abort('Duplicate Variable Name ' + name);
-  }
-
-  addEntry(name, 'v');
-
-  let isNegative = false;
-
-  symbolTable[name] = 'v';
-
-  return q()
+  return next()
     .then(() => {
-      let nextChar = look();
-      if (nextChar === '=') {
-        return match('=')
-          .then(() => {
-            let nextChar = look();
-            if (nextChar === '-') {
-              isNegative = true;
-              return match('-');
-            }
-          }).then(() => {
-            return getNum();
-          })
-          .then((num) => {
-            emitCode(num * (isNegative ? -1 : 1));
-          });
-      } else {
-        emitCode(0);
+      if (token !== 'x') {
+        expected('Variable Name');
       }
+    })
+    .then(() => {
+      checkDup(value);
+      return addEntry(value, 'v');
+    })
+    .then(() => {
+      return allocate(value, '0');
+    })
+    .then(() => {
+      return next();
     });
 
 }
@@ -347,10 +320,20 @@ function inTable(name) {
   return symbolTable[name] !== undefined;
 }
 
-function addEntry(name, symbolType) {
-  if (inTable(name)) {
-    abort('Duplicate Identifier ' + name);
+function checkTable(name) {
+  if (!inTable(name)) {
+    undefinedVar(name);
   }
+}
+
+function checkDup(name) {
+  if (inTable(name)) {
+    duplicateVar(name);
+  }
+}
+
+function addEntry(name, symbolType) {
+  checkDup(name);
 
   symbolTable[name] = symbolType;
 }
@@ -358,8 +341,12 @@ function addEntry(name, symbolType) {
 function assignment() {
   return q()
     .then(() => {
+      checkTable(value);
       let name = value;
-      return match('=')
+      return next()
+        .then(() => {
+          return matchString('=');
+        })
         .then(() => {
           return boolExpression();
         })
@@ -451,9 +438,6 @@ function popDiv() {
 
 // Store primary register to variable
 function store(name) {
-  if (!inTable(name)) {
-    undefinedVar(name);
-  }
   emitLn(`LEA ${name}(PC),A0`);
   emitLn('MOVE D0,(A0)');
 }
@@ -531,54 +515,38 @@ function setGreaterOrEqual() {
 }
 
 // Read variable to primary register
-function readVar() {
+function readIt() {
   emitLn('BSR READ');
   store(value);
 }
 
-// Write variable from primary register
-function writeVar() {
+// Write from primary register
+function writeIt() {
   emitLn('BSR WRITE');
 }
 
 function equals() {
-  return match('=')
-    .then(() => {
-      return expression();
-    })
-    .then(() => {
-      return popCompare();
-    })
+  return nextExpression()
     .then(() => {
       return setEqual();
     });
 }
 
 function notEquals() {
-  return match('>')
-    .then(() => {
-      return expression();
-    })
-    .then(() => {
-      return popCompare();
-    })
+  return nextExpression()
     .then(() => {
       return setNEqual();
     });
 }
 
 function less() {
-  return match('<')
+  return next()
     .then(() => {
-      let nextChar = look();
-      switch(nextChar) {
+      switch(token) {
         case '=': return lessOrEqual();
         case '>': return notEquals();
         default:
-          return expression()
-            .then(() => {
-              return popCompare();
-            })
+          return compareExpression()
             .then(() => {
               return setLess();
             });
@@ -587,38 +555,22 @@ function less() {
 }
 
 function lessOrEqual() {
-  return match('=')
-    .then(() => {
-      return expression();
-    })
-    .then(() => {
-      return popCompare();
-    })
+  return nextExpression()
     .then(() => {
       return setLessOrEqual();
     });
 }
 
 function greater() {
-  return match('>')
+  return next()
     .then(() => {
-      let nextChar = look();
-      if (nextChar === '=') {
-        return match('=')
-          .then(() => {
-            return expression();
-          })
-          .then(() => {
-            return popCompare();
-          })
+      if (token === '=') {
+        return nextExpression()
           .then(() => {
             return setGreaterOrEqual();
           });
       } else {
-        return expression()
-          .then(() => {
-            return popCompare();
-          })
+        return compareExpression()
           .then(() => {
             return setGreater();
           });
@@ -629,28 +581,25 @@ function greater() {
 function relation() {
   return expression()
     .then(() => {
-      let nextChar = look();
-      if (isRelop(nextChar)) {
+      if (isRelop(token)) {
         return q()
           .then(() => {
             return push();
           })
           .then(() => {
-            switch(nextChar) {
+            switch(token) {
               case '=': return equals();
-              case '#': return notEquals();
               case '<': return less();
               case '>': return greater();
             }
           })
       }
-    })
+    });
 }
 
 function notFactor() {
-  let nextChar = look();
-  if (nextChar === '!') {
-    return match('!')
+  if (token === '!') {
+    return next()
       .then(() => {
         return relation();
       })
@@ -664,14 +613,13 @@ function notFactor() {
 
 function boolTerm() {
   function boolTermTail() {
-    let nextChar = look();
-    if (nextChar === '&') {
+    if (token === '&') {
       return q()
         .then(() => {
           return push();
         })
         .then(() => {
-          return match('&');
+          return next();
         })
         .then(() => {
           return notFactor();
@@ -680,25 +628,19 @@ function boolTerm() {
           return popAnd();
         })
         .then(() => {
-          return newLine();
-        })
-        .then(() => {
           return boolTermTail();
         });
     }
   }
 
-  return newLine()
-    .then(() => {
-      return notFactor();
-    })
+  return notFactor()
     .then(() => {
       return boolTermTail();
     });
 }
 
 function boolOr() {
-  return match('|')
+  return next()
     .then(() => {
       return boolTerm();
     })
@@ -708,7 +650,7 @@ function boolOr() {
 }
 
 function boolXor() {
-  return match('~')
+  return next()
     .then(() => {
       return boolTerm();
     })
@@ -719,20 +661,16 @@ function boolXor() {
 
 function boolExpression() {
   function boolExpressionTail() {
-    let nextChar = look();
-    if (isOrop(nextChar)) {
+    if (isOrop(token)) {
       return q()
         .then(() => {
           return push();
         })
         .then(() => {
-          switch(nextChar) {
+          switch(token) {
             case '|': return boolOr();
             case '~': return boolXor();
           }
-        })
-        .then(() => {
-          return newLine();
         })
         .then(() => {
           return boolExpressionTail();
@@ -740,10 +678,7 @@ function boolExpression() {
     }
   }
 
-  return newLine()
-    .then(() => {
-      return boolTerm();
-    })
+  return boolTerm()
     .then(() => {
       return boolExpressionTail();
     });
@@ -753,25 +688,38 @@ function undefinedVar(name) {
   abort('Undefined Identifier ' + name);
 }
 
+function duplicateVar(name) {
+  abort('Duplicate Identifier ' + name);
+}
+
+function checkIdent() {
+  if (token !== 'x') {
+    expected('Identifier', token);
+  }
+}
+
 function factor() {
-  let nextChar = look();
-  if (nextChar === '(') {
-    return match('(')
+  if (token === '(') {
+    return next()
       .then(() => {
         return boolExpression();
       })
       .then(() => {
-        return match(')');
-      });
-  } else if (isAlpha(nextChar)) {
-    return getName()
-      .then(() => {
-        return loadVar(value);
+        return matchString(')');
       });
   } else {
-    return getNum()
-      .then((number) => {
-        return loadConst(number);
+    return q()
+      .then(() => {
+        if (token === 'x') {
+          return loadVar(value);
+        } else if (token === '#') {
+          return loadConst(value);
+        } else {
+          expected('Math Factor');
+        }
+      })
+      .then(() => {
+        return next();
       });
   }
 }
@@ -810,7 +758,7 @@ function firstFactor() {
 }
 
 function multiply() {
-  return match('*')
+  return next()
     .then(() => {
       return factor();
     })
@@ -820,7 +768,7 @@ function multiply() {
 }
 
 function divide() {
-  return match('/')
+  return next()
     .then(() => {
       return factor();
     })
@@ -830,17 +778,15 @@ function divide() {
 }
 
 function term1() {
-  return newLine()
+  return q()
     .then(() => {
-      let nextChar = look();
-      if (isMulop(nextChar)) {
+      if (isMulop(token)) {
         return q()
           .then(() => {
             return push();
           })
           .then(() => {
-            let nextChar = look();
-            switch(nextChar) {
+            switch(token) {
               case '*': return multiply();
               case '/': return divide();
             }
@@ -867,7 +813,7 @@ function firstTerm() {
 }
 
 function add() {
-  return match('+')
+  return next()
     .then(() => {
       return term();
     })
@@ -877,7 +823,7 @@ function add() {
 }
 
 function subtract() {
-  return match('-')
+  return next()
     .then(() => {
       return term();
     })
@@ -888,21 +834,16 @@ function subtract() {
 
 function expression() {
   function expressionTail() {
-    let nextChar = look();
-    if (isAddop(nextChar)) {
+    if (isAddop(token)) {
       return q()
         .then(() => {
           return push();
         })
         .then(() => {
-          let nextChar = look();
-          switch(nextChar) {
+          switch(token) {
             case '+': return add();
             case '-': return subtract();
           }
-        })
-        .then(() => {
-          return newLine();
         })
         .then(() => {
           return expressionTail();
@@ -910,18 +851,39 @@ function expression() {
     }
   }
 
-  return newLine()
+  return q()
     .then(() => {
-      return firstTerm();
+      if (isAddOp(token)) {
+        return clear();
+      } else {
+        return term();
+      }
     })
     .then(() => {
       return expressionTail();
     });
 }
 
+function compareExpression() {
+  return expression()
+    .then(() => {
+      return popCompare();
+    });
+}
+
+function nextExpression() {
+  return next()
+    .then(() => {
+      return compareExpression();
+    });
+}
+
 function doIf() {
   let label1, label2;
-  return boolExpression()
+  return next()
+    .then(() => {
+      boolExpression()
+    })
     .then(() => {
       label1 = newLabel();
       label2 = label1;
@@ -957,6 +919,8 @@ function doWhile() {
   let label1, label2;
   return q()
     .then(() => {
+      return next();
+    }).then(() => {
       label1 = newLabel();
       label2 = newLabel();
       return postLabel(label1);
@@ -981,14 +945,19 @@ function doWhile() {
     });
 }
 
+function readVar() {
+  checkIdent();
+  checkTable(value);
+  return readIt(value)
+    .then(() => {
+      return next();
+    });
+}
+
 function doRead() {
   function varListTail() {
-    let nextChar = look();
-    if (nextChar === ',') {
-      return match(',')
-        .then(() => {
-          return getName();
-        })
+    if (token === ',') {
+      return next()
         .then(() => {
           return readVar();
         })
@@ -998,9 +967,9 @@ function doRead() {
     }
   }
 
-  return match('(')
+  return next()
     .then(() => {
-      return getName();
+      return matchString('(');
     })
     .then(() => {
       return readVar();
@@ -1009,45 +978,46 @@ function doRead() {
       return varListTail();
     })
     .then(() => {
-      return match(')');
+      return matchString(')');
     });
 }
 
 function doWrite() {
   function writeListTail() {
-    let nextChar = look();
-    if (nextChar === ',') {
-      return match(',')
+    if (token === ',') {
+      return next()
         .then(() => {
           return expression();
         })
         .then(() => {
-          return writeVar();
+          return writeIt();
         })
         .then(() => {
           return writeListTail();
         });
     }
   }
-  return match('(')
+  return next()
+    .then(() => {
+      return matchString('(');
+    })
     .then(() => {
       return expression();
     })
     .then(() => {
-      return writeVar();
+      return writeIt();
     })
     .then(() => {
       return writeListTail();
     })
     .then(() => {
-      return match(')');
+      return matchString(')');
     });
 }
 
 function skipWhite() {
   return q()
     .then(() => {
-
       let nextChar = look();
       if (isWhite(nextChar)) {
         return getChar()
@@ -1090,34 +1060,30 @@ function newLine() {
     });
 }
 
-//init()
-//  .then(() => {
-//    return prog();
-//  })
-//  .then(() => {
-//    let nextChar = look();
-//    if (nextChar !== CR) {
-//      abort(`Unexpected data after '.'`);
-//    }
-//  })
-//  .catch((err) => {
-//    console.log(err.stack);
-//  });
-
-
 init()
   .then(() => {
-    function tokenLoop() {
-      return next()
-        .then(() => {
-          console.log(`token=${token}, value=${value}`);
-          if (token !== '.') {
-            return tokenLoop();
-          }
-        });
-    }
-
-    return tokenLoop();
+    return matchString('PROGRAM');
+  })
+  .then(() => {
+    return header();
+  })
+  .then(() => {
+    return topDecls();
+  })
+  .then(() => {
+    return matchString('BEGIN');
+  })
+  .then(() => {
+    return prolog();
+  })
+  .then(() => {
+    return block();
+  })
+  .then(() => {
+    return matchString('END');
+  })
+  .then(() => {
+    return epilog();
   });
 
 process.on('uncaughtException', function(err) {
