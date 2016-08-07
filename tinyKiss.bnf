@@ -1,7 +1,12 @@
 <program> ::= PROGRAM <top-level decl> <main> '.'
 <main> ::= BEGIN <block> END
-<top-level decls> ::= ( <data declaration> )*
+<top-level decls> ::= ( <declaration> )*
+<declaration> ::= <data decl> | <procedure> | <main program>
 <data declaration> ::= VAR <var-list>
+<procedure> ::= PROCEDURE <ident> 
+                '(' <param-list> ')' <begin-block>
+<param-list> ::= <parameter> ( ',' <parameter> )* | null
+<main program> ::= PROGRAM <ident> <begin-block>
 <var-list> ::= <var> (, <var>)*
 <var> ::= <ident> [ = <integer> ]
 <block> ::= ( <statement> )*
@@ -19,3 +24,5 @@
 <relation> ::= <expression> [ <relop> <expression> ]
 <if> ::= IF <bool-expression> <block> [ ELSE <block> ] ENDIF
 <while> ::= WHILE <bool-expression> <block> ENDWHILE
+<proc_call> ::= <identifier> '(' <param-list> ')'
+

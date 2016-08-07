@@ -179,13 +179,15 @@ function addParam(name) {
 }
 
 function loadParam(n) {
-  let offset = 8 + 2 * (numParams - n);
-  emitLn(`MOVE ${offset}(A6),D0`);
+  let offset = 8 + 4 * (numParams - n);
+  emitLn(`MOVE.L ${offset}(A6),A0`);
+  emitLn('MOVE (A0),D0');
 }
 
 function storeParam(n) {
-  let offset = 8 + 2 * (numParams - n);
-  emitLn(`MOVE D0,${offset}(A6)`);
+  let offset = 8 + 4 * (numParams - n);
+  emitLn(`MOVE.L ${offset}(A6),A0`);
+  emitLn('MOVE D0,(A0)');
 }
 
 function push() {
@@ -383,9 +385,9 @@ function formalParam() {
 }
 
 function param() {
-  return expression()
-    .then(() => {
-      return push();
+  return getName()
+    .then((name) => {
+      emitLn(`PEA ${name}(PC)`);
     });
 }
 
@@ -416,7 +418,7 @@ function paramList() {
       return match(')');
     })
     .then(() => {
-      return 2 * n;
+      return 4 * n;
     });
 }
 
