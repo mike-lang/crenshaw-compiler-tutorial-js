@@ -20,6 +20,7 @@ let symbolTable = {};
 
 let paramsTable = {};
 let numParams = 0;
+let base;
 
 function clearParams() {
   paramsTable = {};
@@ -179,12 +180,12 @@ function addParam(name) {
 }
 
 function loadParam(n) {
-  let offset = 8 + 2 * (numParams - n);
+  let offset = 8 + 2 * (base - n);
   emitLn(`MOVE ${offset}(A6),D0`);
 }
 
 function storeParam(n) {
-  let offset = 8 + 2 * (numParams - n);
+  let offset = 8 + 2 * (base - n);
   emitLn(`MOVE D0,${offset}(A6)`);
 }
 
@@ -296,7 +297,49 @@ function formalList() {
     })
     .then(() => {
       return match(')');
+    })
+    .then(() => {
+      return fin();
+    })
+    .then(() => {
+      base = numParams;
+      numParams = numParams + 4;
     });
+}
+
+function locDecl() {
+  return match('v')
+    .then(() => {
+      return getName();
+    })
+    .then((name) => {
+      return addParam(name);
+    })
+    .then(() => {
+      return fin();
+    });
+}
+
+function locDecls() {
+  function locDeclsTail() {
+    let nextChar = look();
+    if (nextChar === 'v') {
+      return locDecl()
+        .then(() => {
+          n++;
+        })
+        .then(() => {
+          return locDeclsTail();
+        });
+    }
+  }
+  let n = 0;
+
+  return locDeclsTail()
+    .then(() => {
+      return n;
+    });
+
 }
 
 function doBlock() {
@@ -420,9 +463,9 @@ function paramList() {
     });
 }
 
-function procProlog(procName) {
+function procProlog(procName, numLocalWords) {
   postLabel(procName);
-  emitLn('LINK A6,#0');
+  emitLn(`LINK A6,#${-2 * numLocalWords}`);
 }
 
 function procEpilog() {
@@ -436,16 +479,16 @@ function doProc() {
       return getName();
     })
     .then((name) => {
+      if (inTable(name)) {
+        return duplicateVar(name);
+      }
+      symbolTable[name] = 'p';
       return formalList()
         .then(() => {
-          return fin();
+          return locDecls();
         })
-        .then(() => {
-          if (inTable(name)) {
-            duplicateVar(name);
-          }
-          symbolTable[name] = 'p';
-          return procProlog(name);
+        .then((numLocalWords) => {
+          return procProlog(name, numLocalWords);
         })
         .then(() => {
           return beginBlock();
