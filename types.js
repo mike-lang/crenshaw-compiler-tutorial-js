@@ -114,15 +114,47 @@ function getName() {
 }
 
 function getNum() {
+  function accumulateDigits() {
+    let nextChar = look();
+
+    if (isDigit(nextChar)) {
+      value = 10 * value + parseInt(nextChar, 10);
+      return getChar()
+        .then(() => {
+          return accumulateDigits();
+        });
+    }
+
+  }
   let nextChar = look();
 
   if (!isDigit(nextChar)) {
     expected('Integer', nextChar);
   }
+  let value = 0;
 
-  return getChar(() => {
-    return skipWhite();
-  }).thenResolve(nextChar);
+  return accumulateDigits(() => {
+    return skipWhite()
+      .thenResolve(value);
+  });
+}
+
+function loadNum(n) {
+  let valType;
+  if (Math.abs(n) <= 127) {
+    valType = 'B';
+  } else if (Math.abs(n) <= 32767) {
+    valType = 'W';
+  } else {
+    valType = 'L';
+  }
+
+  loadConst(n, valType);
+  return valType;
+}
+
+function loadConst(n, valType) {
+  move(valType, `#${n}`, 'D0');
 }
 
 function expected(s, a) {
@@ -197,8 +229,8 @@ function storeParam(n) {
   emitLn(`MOVE D0,${offset}(A6)`);
 }
 
-function push() {
-  emitLn('MOVE D0,-(SP)');
+function push(size) {
+  move(size, 'D0', '-(SP)');
 }
 
 function postLabel(l) {
@@ -229,7 +261,108 @@ function loadVar(name, varType) {
 }
 
 function load(name) {
-  loadVar(name, getVarType(name));
+  let varType = getVarType(name);
+  loadVar(name, varType);
+  return varType;
+}
+
+// Convert the type of the value stored in register reg
+function convert(source, dest, reg) {
+  if (source !== dest) {
+    if (source === 'B') {
+      emitLn(`AND.W #$FF,${reg}`);
+    }
+    if (dest === 'L') {
+      emitLn(`EXT.L ${reg}`);
+    }
+  }
+}
+
+function promote(sourceType, destType, reg) {
+  let resultType = sourceType;
+
+  if (sourceType !== destType) {
+    if (sourceType === 'B' || ((sourceType === 'W') && (destType === 'L'))) {
+      convert(sourceType, destType, reg);
+      resultType = destType;
+    }
+  }
+
+  return resultType;
+
+}
+
+function sameType(sourceType, destType) {
+  let valType = promote(sourceType, destType, 'D7');
+  return promote(destType, valType, 'D0');
+}
+
+function popAdd(stackType, regType) {
+  pop(stackType);
+  let resultType = sameType(stackType, regType);
+  genAdd(resultType);
+  return resultType;
+}
+
+function popSub(stackType, regType) {
+  pop(stackType);
+  let resultType = sameType(stackType, regType);
+  genSub(resultType);
+  return resultType;
+}
+
+function genAdd(size) {
+  emitLn(`ADD.${size} D7,D0`);
+}
+
+function getSub(size) {
+  emitLn(`SUB.${size} D7,D0`);
+  emitLn(`NEG.${size} D0`);
+}
+
+function factor() {
+  let nextChar = look();
+
+  if (nextChar = '(') {
+    return match('(')
+      .then(() => {
+        return expression();
+      })
+      .then((expressionType) => {
+        return match(')')
+          .thenResolve(expressionType);
+      });
+  } else if (isAlpha(nextChar)) {
+    return getName()
+      .then((name) => {
+        return load(name);
+      });
+  } else {
+    return getNum()
+      .then((num) => {
+        return loadNum(num);
+      });
+  }
+}
+
+function multiply(firstType) {
+  return match('*')
+    .then(() => {
+      return factor();
+    })
+    .then((factorType) => {
+      return popMul(firstType, factorType);
+    });
+}
+
+function divide(firstType) {
+  return match('/')
+    .then(() => {
+      return factor();
+    })
+    .then((factorType) => {
+      return popDiv(firstType, factorType);
+    });
 }
 
 // Store primary register to variable
@@ -238,8 +371,10 @@ function storeVar(name, varType) {
   move(varType, 'D0', '(A0)');
 }
 
-function store(name) {
-  storeVar(name, getVarType(name));
+function store(name, sourceType) {
+  let destType = getVarType(name);
+  convert(sourceType, destType);
+  storeVar(name, destType);
 }
 
 function init() {
@@ -249,11 +384,152 @@ function init() {
     });
 }
 
-function expression() {
-  return getName()
-    .then((name) => {
-      return load(name);
+function term() {
+  function termTail(firstType) {
+    return q()
+      .then(() => {
+        let nextChar = look();
+        if (isMulop(nextChar)) {
+          push(firstType);
+          switch(nextChar) {
+            case '*': return multiply(firstType);
+            case '/': return divide(firstType);
+          }
+        } else {
+          return firstType;
+        }
+      })
+      .then((termType) => {
+        return termTail(termType);
+      })
+  }
+  return factor()
+    .then((factorType) => {
+      return termTail(factorType);
     });
+}
+
+function genMult() {
+  emitLn('MULS D7,D0');
+}
+
+function genLongMult() {
+  emitLn('JSR MUL32');
+}
+
+function popMul(stackType, regType) {
+  pop(stackType);
+  let resultType = sameType(stackType, regType);
+  convert(resultType, 'W', 'D7');
+  convert(resultType, 'W', 'D0');
+
+  if (resultType === 'L') {
+    genLongMult();
+  } else {
+    genMult();
+  }
+
+  if (resultType === 'B') {
+    return 'W';
+  } else {
+    return 'L';
+  }
+}
+
+function popDiv(stackType, regType) {
+  pop(stackType);
+  convert(stackType, 'L', 'D7');
+
+  if (stackType === 'L' || regType === 'L') {
+    convert(regType, 'L', 'D0');
+    genLongDiv();
+    return 'L';
+  } else {
+    convert(regType, 'W', 'D0');
+    genDiv();
+    return stackType;
+  }
+}
+
+function genDiv() {
+  emitLn('DIVS D0,D7');
+  move('W', 'D7', 'D0');
+}
+
+function genLongDiv() {
+  emitLn('JSR DIV32');
+}
+
+function expression() {
+
+  function expressionTail(termType) {
+    let nextChar = look();
+
+    if (isAddop(nextChar)) {
+      return q()
+        .then(() => {
+          push(termType);
+          switch(nextChar) {
+            case '+': return add(termType);
+            case '-': return subtract(termType);
+          }
+        })
+        .then((nextTermType) => {
+          return expressionTail(nextTermType);
+        });
+    }
+  }
+
+  return q()
+    .then(() => {
+      let nextChar = look();
+
+      if (isAddop(nextChar)) {
+        return unop();
+      } else {
+        return term();
+      }
+    })
+    .then((termType) => {
+      return expressionTail(termType);
+    })
+    .then((expressionType) => {
+      return expressionType;
+    });
+}
+
+function add(valType) {
+  return match('+')
+    .then(() => {
+      return term();
+    })
+    .then((termType) => {
+      return popAdd(valType, termType);
+    });
+}
+
+function subtract(valType) {
+  return match('-')
+    .then(() => {
+      return term();
+    })
+    .then((termType) => {
+      return popSub(valType, termType);
+    });
+}
+
+function pop(size) {
+  move(size, '(SP)+', 'D7');
+}
+
+function unop() {
+  clear();
+  return 'W';
+}
+
+// Clears the primary register
+function clear() {
+  emitLn('CLR D0');
 }
 
 function assignOrProc() {
@@ -275,8 +551,8 @@ function assignment() {
         .then(() => {
           return expression();
         })
-        .then(() => {
-          return store(name);
+        .then((expressionResultType) => {
+          return store(name, expressionResultType);
         });
     });
 }
