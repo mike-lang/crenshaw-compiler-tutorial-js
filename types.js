@@ -1,0 +1,593 @@
+'use strict';
+
+const q = require('q');
+
+const cradle = require('./cradle');
+
+const look = cradle.look,
+  getChar = cradle.getChar,
+  abort = cradle.abort,
+  isAlpha = cradle.isAlpha,
+  isDigit = cradle.isDigit,
+  emitLn = cradle.emitLn;
+
+
+const TAB = '\t',
+  CR = '\r',
+  LF = '\n';
+
+let symbolTable = {};
+
+let paramsTable = {};
+let numParams = 0;
+let base;
+
+function dumpTable() {
+  let symbolNames = Object.getOwnPropertyNames(symbolTable);
+
+  symbolNames.forEach((name) => {
+    console.log(`${name} ${symbolTable[name]}`);
+  });
+}
+
+function clearParams() {
+  paramsTable = {};
+  numParams = 0;
+}
+
+function isAlNum(c) {
+  return isAlpha(c) || isDigit(c);
+}
+
+function isAddop(c) {
+  return c === '+' || c === '-';
+}
+
+function isMulop(c) {
+  return c === '*' || c === '/';
+}
+
+function isOrop(c) {
+  return c === '|' || c ==='~';
+}
+
+function isRelop(c) {
+  return c === '=' || c === '#' || c === '<' || c === '>';
+}
+
+function isWhite(c) {
+  // Comments and line separators removed for procedures chapter
+  return c === ' ' || c === TAB;
+}
+
+function skipWhite() {
+  return q()
+    .then(() => {
+      let nextChar = look();
+      if (isWhite(nextChar)) {
+        return getChar()
+          .then(() => {
+            return skipWhite();
+          });
+      }
+    });
+}
+
+function fin() {
+  return q()
+    .then(() => {
+      let nextChar = look();
+      if (nextChar === CR) {
+        return getChar()
+          .then(() => {
+            let nextChar = look();
+            if (nextChar === LF) {
+              return getChar();
+            }
+          });
+      }
+    });
+}
+
+function match(x) {
+  let nextChar = look();
+  if (nextChar !== x) {
+    return expected(`'${x}'`, nextChar);
+  }
+
+  return getChar()
+    .then(() => {
+      return skipWhite();
+    });
+}
+
+function getName() {
+  let nextChar = look();
+
+  if (!isAlpha(nextChar)) {
+    expected('Name', nextChar);
+  }
+
+  return getChar(() => {
+    return skipWhite();
+  }).thenResolve(nextChar.toUpperCase());
+}
+
+function getNum() {
+  let nextChar = look();
+
+  if (!isDigit(nextChar)) {
+    expected('Integer', nextChar);
+  }
+
+  return getChar(() => {
+    return skipWhite();
+  }).thenResolve(nextChar);
+}
+
+function expected(s, a) {
+  abort(`"${s}" Expected, instead saw "${a}"`);
+}
+
+function undefinedVar(name) {
+  abort('Undefined Identifier ' + name);
+}
+
+function duplicateVar(name) {
+  abort('Duplicate Identifier ' + name);
+}
+
+function typeofSymbol(symbolName) {
+  if (isParam(symbolName)) {
+    return 'f';
+  }
+  return symbolTable[symbolName];
+}
+
+function inTable(name) {
+  return symbolTable[name] !== undefined;
+}
+
+function checkDup(name) {
+  if (inTable(name)) {
+    duplicateVar(name);
+  }
+}
+
+function addEntry(name, symbolType) {
+  checkDup(name);
+
+  symbolTable[name] = symbolType;
+}
+
+function checkVar(name) {
+  if (!inTable(name)) {
+    return undefinedVar(name);
+  }
+
+  if (typeofSymbol(name) !== 'v') {
+    return abort(`${name} is not a variable`);
+  }
+}
+
+function paramNumber(n) {
+  return paramsTable[n];
+}
+
+function isParam(n) {
+  return paramsTable[n] !== undefined;
+}
+
+function addParam(name) {
+  if (isParam(name)) {
+    return duplicateVar(name);
+  }
+
+  numParams++;
+  paramsTable[name] = numParams;
+}
+
+function loadParam(n) {
+  let offset = 8 + 2 * (base - n);
+  emitLn(`MOVE ${offset}(A6),D0`);
+}
+
+function storeParam(n) {
+  let offset = 8 + 2 * (base - n);
+  emitLn(`MOVE D0,${offset}(A6)`);
+}
+
+function push() {
+  emitLn('MOVE D0,-(SP)');
+}
+
+function postLabel(l) {
+  console.log(l + ':');
+}
+
+function isVarType(c) {
+  return c === 'B' || c === 'W' || c === 'L';
+}
+
+function getVarType(name) {
+  let varType = typeofSymbol(name);
+
+  if (!isVarType(varType)) {
+    abort(`Identifier ${name} is not a variable`);
+  }
+
+  return varType;
+}
+
+function move(size, source, dest) {
+  emitLn(`MOVE.${size} ${source},${dest}`);
+}
+
+// Load a variable to primary register
+function loadVar(name, varType) {
+  move(varType, name + '(PC)', 'D0');
+}
+
+function load(name) {
+  loadVar(name, getVarType(name));
+}
+
+// Store primary register to variable
+function storeVar(name, varType) {
+  emitLn(`LEA ${name}(PC),A0`);
+  move(varType, 'D0', '(A0)');
+}
+
+function store(name) {
+  storeVar(name, getVarType(name));
+}
+
+function init() {
+  return getChar()
+    .then(() => {
+      return skipWhite();
+    });
+}
+
+function expression() {
+  return getName()
+    .then((name) => {
+      return load(name);
+    });
+}
+
+function assignOrProc() {
+  return getName((name) => {
+    switch (typeofSymbol(name)) {
+      case undefined: return undefinedVar(name);
+      case 'v': return assignment(name);
+      case 'f': return assignment(name);
+      case 'p': return callProc(name);
+      default: abort(`Identifier ${name} cannot be used here`);
+    }
+  });
+}
+
+function assignment() {
+  return getName()
+    .then((name) => {
+      return match('=')
+        .then(() => {
+          return expression();
+        })
+        .then(() => {
+          return store(name);
+        });
+    });
+}
+
+function callProc(name) {
+  return paramList()
+    .then((numParams) => {
+      return call(name)
+        .then(() => {
+          return cleanStack(numParams);
+        });
+    });
+}
+
+function cleanStack(n) {
+  if (n > 0) {
+    emitLn(`ADD #${n},SP`);
+  }
+}
+
+function call(name) {
+  emitLn(`BSR ${name}`);
+}
+
+function formalList() {
+  function paramListTail() {
+    let nextChar = look();
+    if (nextChar === ',') {
+      return match(',')
+        .then(() => {
+          return formalParam();
+        })
+        .then(() => {
+          return paramListTail();
+        });
+    }
+  }
+  return match('(')
+    .then(() => {
+      let nextChar = look();
+      if (nextChar !== ')') {
+        return formalParam()
+          .then(() => {
+            return paramListTail();
+          });
+      }
+    })
+    .then(() => {
+      return match(')');
+    })
+    .then(() => {
+      return fin();
+    })
+    .then(() => {
+      base = numParams;
+      numParams = numParams + 4;
+    });
+}
+
+function locDecl() {
+  return match('v')
+    .then(() => {
+      return getName();
+    })
+    .then((name) => {
+      return addParam(name);
+    })
+    .then(() => {
+      return fin();
+    });
+}
+
+function locDecls() {
+  function locDeclsTail() {
+    let nextChar = look();
+    if (nextChar === 'v') {
+      return locDecl()
+        .then(() => {
+          n++;
+        })
+        .then(() => {
+          return locDeclsTail();
+        });
+    }
+  }
+  let n = 0;
+
+  return locDeclsTail()
+    .then(() => {
+      return n;
+    });
+
+}
+
+function block() {
+  let nextChar = look();
+
+  if (nextChar !== '.') {
+    return assignment()
+      .then(() => {
+        return fin();
+      })
+      .then(() => {
+        return block();
+      });
+  }
+}
+
+function doBlock() {
+  let nextChar = look();
+
+  if (nextChar !== 'e') {
+    return q() 
+      .then(() => {
+        return assignOrProc();
+      })
+      .then(() => {
+        return fin();
+      })
+      .then(() => {
+        return doBlock();
+      });
+  }
+}
+
+function beginBlock() {
+  return match('b')
+    .then(() => {
+      return fin();
+    })
+    .then(() => {
+      return doBlock();
+    })
+    .then(() => {
+      return match('e');
+    })
+    .then(() => {
+      return fin();
+    });
+}
+
+function alloc(name, varType) {
+  addEntry(name, varType);
+  allocVar(name, varType);
+}
+
+function allocVar(name, varType) {
+  console.log(`${name}:\tDC.${varType} 0`);
+}
+
+function decl() {
+  return getName()
+    .then((varType) => {
+      return getName()
+        .then((name) => {
+          return alloc(name, varType);
+        });
+    });
+}
+
+function topDecls() {
+  return q() 
+    .then(() => {
+      let nextChar = look();
+      if (nextChar !== 'B') {
+        return q()
+          .then(() => {
+            switch(nextChar) {
+              case 'b': 
+              case 'w':
+              case 'l':
+                return decl();
+              default: abort(`Unrecognized Keyword ${nextChar}`);
+            }
+          })
+          .then(() => {
+            return fin();
+          })
+          .then(() => {
+            return topDecls();
+          });
+      }
+    });
+}
+
+function formalParam() {
+  return getName()
+    .then((name) => {
+      return addParam(name);
+    });
+}
+
+function param() {
+  return expression()
+    .then(() => {
+      return push();
+    });
+}
+
+function paramList() {
+  function paramListTail() {
+    return match(',') 
+      .then(() => {
+        return param();
+      })
+      .then(() => {
+        n++;
+      });
+  }
+
+  let n = 0;
+  return match('(')
+    .then(() => {
+      let nextChar = look();
+      if (nextChar !== ')') {
+        return param()
+          .then(() => {
+            n++;
+            return paramListTail();
+          });
+      }
+    })
+    .then(() => {
+      return match(')');
+    })
+    .then(() => {
+      return 2 * n;
+    });
+}
+
+function procProlog(procName, numLocalWords) {
+  postLabel(procName);
+  emitLn(`LINK A6,#${-2 * numLocalWords}`);
+}
+
+function procEpilog() {
+  emitLn('UNLK A6');
+  emitLn('RTS');
+}
+
+function doProc() {
+  return match('p')
+    .then(() => {
+      return getName();
+    })
+    .then((name) => {
+      if (inTable(name)) {
+        return duplicateVar(name);
+      }
+      symbolTable[name] = 'p';
+      return formalList()
+        .then(() => {
+          return locDecls();
+        })
+        .then((numLocalWords) => {
+          return procProlog(name, numLocalWords);
+        })
+        .then(() => {
+          return beginBlock();
+        })
+        .then(() => {
+          return procEpilog();
+        })
+        .then(() => {
+          return clearParams();
+        });
+    });
+    
+}
+
+function returnStatement() {
+  emitLn('RTS');
+}
+
+function doMain() {
+  return match('p')
+    .then(() => {
+      return getName();
+    })
+    .then((name) => {
+      return fin()
+        .then(() => {
+          if (inTable(name)) {
+            duplicateVar(name);
+          }
+        });
+    })
+    .then(() => {
+      return prolog();
+    })
+    .then(() => {
+      return beginBlock();
+    });
+}
+
+init()
+  .then(() => {
+    return topDecls();
+  })
+  .then(() => {
+    return match('B');
+  })
+  .then(() => {
+    return fin();
+  })
+  .then(() => {
+    return block();
+  })
+  .then(() => {
+    return dumpTable();
+  })
+  .catch((err) => {
+    console.log(err);
+  });
