@@ -13,4 +13,11 @@ compiler in nodeJS javascript instead of in Turbo Pascal.
     [OSX](https://www.davidbaumgold.com/tutorials/wine-mac/)
 * [EASy68K Editor/Assembler/Simulator](http://www.easy68k.com/)
 
+## Getting started
+
+Install the prerequisites, then:
+* `vagrant up`
+* `vagrant ssh`
+* `npm install`
+to provision a development VM
 Code is written in javascript, targeting nodeJS 4.x LTS
