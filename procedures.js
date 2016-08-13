@@ -22,6 +22,14 @@ let paramsTable = {};
 let numParams = 0;
 let base;
 
+function dumpTable() {
+  let symbolNames = Object.getOwnPropertyNames(symbolTable);
+
+  symbolNames.forEach((name) => {
+    console.log(`${name} ${symbolTable[name]}`);
+  });
+}
+
 function clearParams() {
   paramsTable = {};
   numParams = 0;
